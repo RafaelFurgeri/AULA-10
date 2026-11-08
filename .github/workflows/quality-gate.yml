@@ -1,0 +1,45 @@
+# ============================================================================
+# Atividade 3: Automação de Qualidade - Bloquear PRs com Falhas
+# - Acionado automaticamente em Pull Requests
+# - Rejeita PRs com cobertura insuficiente (< 80% / < 86%), erros de Checkstyle,
+#   violações de PMD ou reprovação no Quality Gate do SonarQube
+# ============================================================================
+
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-gate:
+    name: Pull Request Quality Gate
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run Unit Tests & Enforce Coverage Minimum
+        run: mvn clean test jacoco:report jacoco:check -B
+
+      - name: Enforce Checkstyle & PMD Static Analysis
+        run: mvn checkstyle:check pmd:check -B
+
+      - name: SonarQube Scan & Quality Gate
+        if: env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != ''
+        uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
